@@ -47,7 +47,7 @@ export default function WebcamCapture() {
       formData.append("file", file);
 
 
-      const response = await fetch("https://5a99f136864d.ngrok-free.app/liveness/", {
+      const response = await fetch("https://276439b221c3.ngrok-free.app/liveness/", {
         method: "POST",
         body: formData,
       });
