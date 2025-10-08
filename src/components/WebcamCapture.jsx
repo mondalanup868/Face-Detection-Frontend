@@ -1,17 +1,73 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import Webcam from "react-webcam";
+import * as faceapi from "face-api.js";
 import { Camera, RefreshCw, CheckCircle, XCircle } from "lucide-react";
 
 export default function WebcamCapture() {
   const webcamRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [modelsLoaded, setModelsLoaded] = useState(false);
   const [result, setResult] = useState(null);
   const [facingMode, setFacingMode] = useState("user");
   const [isCapturing, setIsCapturing] = useState(false);
 
+  // Load FaceAPI models
+  useEffect(() => {
+    const loadModels = async () => {
+      const MODEL_URL = "/models"; // folder in public/
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      ]);
+      setModelsLoaded(true);
+    };
+    loadModels();
+  }, []);
+
+  // Real-time face detection
+  useEffect(() => {
+    if (!modelsLoaded) return;
+
+    const interval = setInterval(async () => {
+      if (
+        webcamRef.current &&
+        webcamRef.current.video.readyState === 4 &&
+        canvasRef.current
+      ) {
+        const video = webcamRef.current.video;
+        const detections = await faceapi.detectAllFaces(
+          video,
+          new faceapi.TinyFaceDetectorOptions()
+        );
+
+        const canvas = canvasRef.current;
+        const displaySize = {
+          width: video.videoWidth,
+          height: video.videoHeight,
+        };
+        faceapi.matchDimensions(canvas, displaySize);
+        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        resizedDetections.forEach((det) => {
+          const box = det.box;
+          ctx.strokeStyle = "#8b5cf6"; // purple
+          ctx.lineWidth = 3;
+          ctx.strokeRect(box.x, box.y, box.width, box.height);
+        });
+      }
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [modelsLoaded]);
+
+  // Switch Camera
   const switchCamera = () => {
     setFacingMode((prev) => (prev === "user" ? "environment" : "user"));
   };
 
+  // Capture function (same as before)
   const capture = async () => {
     try {
       setIsCapturing(true);
@@ -62,28 +118,29 @@ export default function WebcamCapture() {
   return (
     <div className="min-h-screen w-full flex justify-center items-center bg-gradient-to-br from-gray-950 to-gray-900 px-3 sm:px-6 py-6">
       <div className="w-full max-w-6xl bg-gray-900/70 backdrop-blur-xl rounded-2xl border border-purple-800 shadow-2xl p-4 sm:p-6 md:p-8">
-        {/* Header */}
         <div className="text-center mb-6">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-purple-400">
             Liveness Detection
           </h1>
         </div>
 
-        {/* Main Section */}
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-10">
-          {/* Left: Webcam */}
           <div className="w-full lg:w-1/2 flex flex-col items-center">
             <div className="relative w-full max-w-sm sm:max-w-md md:max-w-lg h-60 sm:h-72 md:h-96 lg:h-[420px] rounded-xl overflow-hidden border border-purple-600 shadow-md">
               <Webcam
                 ref={webcamRef}
-                screenshotFormat="image/jpeg"
                 mirrored={false}
+                screenshotFormat="image/jpeg"
                 videoConstraints={{
                   facingMode,
                   width: { ideal: 1280 },
                   height: { ideal: 720 },
                 }}
                 className="w-full h-full object-cover"
+              />
+              <canvas
+                ref={canvasRef}
+                className="absolute top-0 left-0 w-full h-full"
               />
               <button
                 onClick={switchCamera}
@@ -104,11 +161,10 @@ export default function WebcamCapture() {
             </button>
           </div>
 
-          {/* Right: Results */}
+          {/* Right: Results (same as before) */}
           <div className="w-full lg:w-1/2 flex flex-col justify-center">
             {result ? (
               <div className="space-y-4">
-                {/* Status */}
                 <div
                   className={`flex items-center gap-3 p-4 rounded-lg border-2 ${
                     isReal
@@ -133,7 +189,6 @@ export default function WebcamCapture() {
                   </div>
                 </div>
 
-                {/* Confidence Bars */}
                 <div>
                   <div className="flex justify-between text-sm text-gray-300 mb-1">
                     <span>Real Confidence</span>
@@ -178,7 +233,6 @@ export default function WebcamCapture() {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="text-center text-xs text-gray-500 mt-6">
           Powered by advanced AI facial recognition
         </div>
